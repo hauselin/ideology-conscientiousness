@@ -3,6 +3,8 @@
 - `data_wide.csv`: data (variables in original scale; not centered/not z-scored)
 - `data_wide_centered.csv`: (continuous variables z-scored) 
 
+If the markdown table doesn't render well on OSF, visit the GitHub repository to see the formatted version: https://github.com/hauselin/ideology-conscientiousness
+
 ## Columns
 
 | Column                  | Type       | Description                                                             |
