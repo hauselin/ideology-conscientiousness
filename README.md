@@ -1,5 +1,7 @@
 # README
 
+docs: documents
+
 ## Open Science Framework Preregistrations
 
 - Study 1: https://osf.io/k9yns
