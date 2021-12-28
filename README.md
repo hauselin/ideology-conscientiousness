@@ -1,6 +1,6 @@
 # README
 
-docs: documents
+`docs`: documents
 
 ## Open Science Framework Preregistrations
 
