@@ -36,8 +36,10 @@ dt1[, n_distinct(responseid)]
 # Model 1 (only false headlines): sharing ~ ideology + conscientiousness + ideology:conscientiousness
 
 m1_1 <- glm(share ~ demrep_c * bfi_c, family = binomial, data = dt1[veracity == 0])
+# m1_1 <- glm(share ~ demrep_c * bfi_c, family = binomial, data = dt1)
 summary(m1_1)
 m1_1c <- coeftest(m1_1, vcovCL(m1_1, ~ responseid + headline_id, NULL, fix = FALSE))
+# m1_1c <- coeftest(m1_1, vcovCL(m1_1, ~ responseid, NULL, fix = FALSE))
 m1_1c
 
 # BF
