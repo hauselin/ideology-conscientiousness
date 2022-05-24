@@ -10,4 +10,7 @@ Conscientiousness does not moderate the association between political orientatio
 - Study 4: https://osf.io/h6gzw
 - Study 5: https://osf.io/8cnyx
 
-## 
+## Directories
+
+- `data`
+- `docs`: materials and stuff
