@@ -1,0 +1,51 @@
+```{r}
+rm(list = ls())
+```
+
+
+```{r}
+library(rms)
+library(fixest)
+library(sandwich)
+library(lmtest)
+library(data.table)
+
+d <- fread("../data/clean/study02.csv")
+
+
+d
+m <- lrm(share ~ warm_repub * c, d, x = T, y = T)
+robcov(m, cluster = d$pid)
+
+feglm(share ~ warm_repub * c, d, family = binomial, vcov = cluster ~ pid)
+
+m <- glm(share ~ warm_repub * c, d, family = binomial)
+summary(m)
+coeftest(m, vcov = vcovCL, cluster = ~pid)
+
+
+
+
+
+# robcov (SEs are different from fixest and sandwich below [the latter two's results are quite similar])
+m <- lrm(vs ~ mpg, d, x = T, y = T)
+robcov(m, cluster = d$am)
+
+# fixest
+feglm(vs ~ mpg, d, family = binomial, vcov = cluster ~ am)
+
+# sandwich
+m <- glm(vs ~ mpg, d, family = binomial)
+coeftest(m, vcov = vcovCL, cluster = ~am)
+
+
+
+
+
+
+feglm(vs ~ mpg, d, family = binomial, vcov = cluster ~ am)
+coeftest(m, vcov = vcovCL(m, cluster = ~am))
+
+
+```
+

@@ -1,6 +1,6 @@
 # README
 
-Conscientiousness does not moderate the association between political orientation and susceptibility to fake news sharing while actively open-minded thinking does
+Conscientiousness does not moderate the association between political ideology and susceptibility to fake news sharing
 
 ## Open Science Framework Preregistrations
 

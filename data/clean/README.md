@@ -9,6 +9,8 @@ Data key
 - `share`: sharing intention (main outcome; 0/1: no/yes)
 - `aot`: actively open-minded thinking
 - `demrep`: political partisanship (1: Democrat; 6: Republican)
+- `social_conserv`: social conservatism (1: strongly liberal; 5: strongly conservative)
+- `economic_conserv`: social conservatism (1: strongly liberal; 5: strongly conservative)
 - `warm_repub`: feeling thermometer (warmness toward Republican voters)
 - `warm_democrat`: feeling thermometer (warmness toward Democrat voters)
 - `potus2016`: which candidate participant voted for in 2016 election
@@ -24,3 +26,5 @@ Data key
 - `edu`: education
 - `concord`: whether headline/stimulus align with participant's political affiliation (0/1: no/yes)
 - `study`: study number
+- `conserv`: mean of `social_conserv` and `economic_conserv`
+- `thermo`: mean of `warm_repub` and `warm_democrat`
