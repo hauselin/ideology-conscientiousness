@@ -1,0 +1,120 @@
+```{r}
+rm(list = ls())
+library(tidyverse); library(data.table); library(glue); library(fixest); library(modelsummary)
+library(BFpack)
+```
+
+```{r}
+get_bf01 <- function(mod) {
+    b <- BF(coef(mod), Sigma = vcov(mod), n = nobs(mod), hypothesis = "IM:C = 0")$BFmatrix_confirmatory[, 1]
+    bf10 <- b[2]
+    bf01 <- 1 / bf10
+    return(bf01)    
+}
+```
+
+
+```{r}
+d0 <- fread("../data/clean/combined_studies.csv")
+d0 <- mutate_if(d0, is.integer, as.numeric)
+setDT(d0)
+glimpse(d0)
+```
+
+```{r recode ideology/partisan variables}
+d0[, demrep_c := demrep]
+
+d0[, .N, potus2020]
+d0[, potus2020trump := case_when(potus2020 == "Donald Trump" ~ 1, 
+                                 potus2020 == "Joe Biden" ~ 0,
+                                 .default = NA)]
+d0[, .N, .(potus2020, potus2020trump)]
+
+d0[, .N, potus2016]
+d0[, potus2016trump := case_when(potus2016 == "Donald Trump" ~ 1, 
+                                 potus2016 == "Hillary Clinton" ~ 0,
+                                 .default = NA)]
+d0[, .N, .(potus2016, potus2016trump)]
+
+d0[, .N, party]
+d0[, mean(demrep_c, na.rm = T), keyby = party]
+d0[, party := case_when(party == 1 ~ -0.5,  # liberal
+                                 party == 2 ~ 0.5,  # republican
+                                 .default = NA)]  # others
+d0[, .N, party]
+d0[, mean(demrep_c, na.rm = T), keyby = party]
+
+d0[, warmth_both := thermo]
+d0[, social_econ_conserv := conserv]
+```
+
+
+
+
+```{r fit models}
+ideology <- c("demrep_c", "warm_repub", "warm_democrat", "potus2020trump", "potus2016trump", "social_conserv", "economic_conserv", "party", "warmth_both", "social_econ_conserv", "ideology")
+length(ideology)
+
+studies <- unique(d0$study)
+
+list_models_clustered <- list()
+list_bfs <- vector(mode = "numeric", length = length(studies))
+list_bfs_study <- list()
+
+
+
+idx <- 2
+for (idx in 1:length(ideology)) {
+
+    ideo <- ideology[idx]
+    modelname <- as.character(idx)
+    print(ideo)
+    
+    d0[, IM := get(ideo)]
+    d0[, C := c]
+    f <- formula(glue("share ~ IM * C"))
+    print(f)
+    
+    # cluster SE
+    mod <- feglm(f, data = d0, family = "binomial", cluster = ~pid)
+    list_models_clustered[[modelname]] <- mod
+    b01 <- get_bf01(mod)
+    print(b01)
+    
+    list_bfs[idx] <- b01
+    
+    # get bf for each study
+    bfs <- vector("numeric", length(studies))
+    for (study in 1:length(studies)) {
+        st <- studies[study]
+        d1 <- d0[study == st][!is.na(IM)]
+        if (nrow(d1) == 0) {
+            bfs[study] <- NA
+            next
+        }
+        mod <- feglm(f, data = d1, family = "binomial", cluster = ~pid)
+        b01 <- get_bf01(mod)
+        bfs[study] <- b01
+    }
+    list_bfs_study[[idx]] <- bfs
+}
+```
+
+```{r}
+d3 <- data.table(bf01 = list_bfs)
+d3[, .(bf01 = round(bf01, 3))]
+
+d4 <- bind_cols(
+    lapply(list_bfs_study, function(x) {
+        d <- data.table(bf01 = round(x, 2))
+        return(d)
+    })
+)
+setnames(d4, as.character(1:length(ideology)))
+d4$study <- studies
+d4 <- select(d4, study, everything())
+d4
+
+fwrite(d3, "../results/bf01_overall.csv")
+fwrite(d4, "../results/bf01_study.csv")
+```
