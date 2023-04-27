@@ -1,0 +1,109 @@
+```{r}
+rm(list = ls())
+library(tidyverse); library(data.table); library(glue); library(fixest); library(modelsummary); library(kableExtra); library(rms)
+```
+
+```{r}
+d0 <- fread("../data/clean/combined_studies.csv")
+d0 <- mutate_if(d0, is.integer, as.numeric)
+setDT(d0)
+glimpse(d0)
+```
+
+```{r recode ideology/partisan variables}
+d0[, demrep_c := demrep]
+
+d0[, .N, potus2020]
+d0[, potus2020trump := case_when(potus2020 == "Donald Trump" ~ 1, 
+                                 potus2020 == "Joe Biden" ~ 0,
+                                 .default = NA)]
+d0[, .N, .(potus2020, potus2020trump)]
+
+d0[, .N, potus2016]
+d0[, potus2016trump := case_when(potus2016 == "Donald Trump" ~ 1, 
+                                 potus2016 == "Hillary Clinton" ~ 0,
+                                 .default = NA)]
+d0[, .N, .(potus2016, potus2016trump)]
+
+d0[, .N, party]
+d0[, mean(demrep_c, na.rm = T), keyby = party]
+d0[, party := case_when(party == 1 ~ -0.5,  # liberal
+                                 party == 2 ~ 0.5,  # republican
+                                 .default = NA)]  # others
+d0[, .N, party]
+d0[, mean(demrep_c, na.rm = T), keyby = party]
+
+d0[, warmth_both := thermo]
+d0[, social_econ_conserv := conserv]
+```
+
+```{r fit models}
+ideology <- c("demrep_c", "warm_repub", "warm_democrat", "potus2020trump", "potus2016trump", "social_conserv", "economic_conserv", "party", "warmth_both", "social_econ_conserv")
+length(ideology)
+
+list_models_noclusteredSE <- list()
+list_models_clustered <- list()
+list_models_clustered_LK <- list()
+
+idx <- 1
+for (idx in 1:length(ideology)) {
+
+    ideo <- ideology[idx]
+    modelname <- as.character(idx)
+    print(ideo)
+    
+    d0[, IM := get(ideo)]
+    d0[, C := c]
+    f <- formula(glue("share ~ IM * C"))
+    print(f)
+    
+    # no cluster SE
+    mod <- feglm(f, data = d0, family = "binomial")
+    list_models_noclusteredSE[[modelname]] <- mod
+    
+    # cluster SE
+    mod <- feglm(f, data = d0, family = "binomial", cluster = ~pid)
+    list_models_clustered[[modelname]] <- mod
+    
+    # cluster SE using another function (probably used by L&K)
+    mod <- lrm(f, data = d0, x = TRUE, y = TRUE)
+    modclust <- robcov(mod, cluster = d0[, pid])
+    list_models_clustered_LK[[modelname]] <- modclust
+}
+```
+
+```{r tables}
+gof_map <- c("vcov.type")
+cm <- c('IM' = 'IM', 'C' = 'C', "IM:C" = "IM x C", '(Intercept)' = 'Constant')
+
+stars <- c("*" = .05, "**" = .01, "***" = .001)
+# output <- "../results/table.png"
+output <- "default"
+
+output <- "../results/table_notclustered.docx"
+ms_raw <- modelsummary(list_models_noclusteredSE, 
+             estimate = c("{estimate}{stars}"), 
+             statistic = "({std.error})", stars = stars, coef_map = cm,
+             gof_map = gof_map, output = output)
+ms_raw
+
+output <- "../results/table_clustered.docx"
+ms_clust <- modelsummary(list_models_clustered, 
+             estimate = c("{estimate}{stars}"), 
+             statistic = "({std.error})", stars = stars, coef_map = cm,
+             gof_map = gof_map, output = output)
+ms_clust
+
+output <- "../results/table_clustered_lk.docx"
+cm2 <- c('IM' = 'IM', 'C' = 'C', "IM * C" = "IM x C", '(Intercept)' = 'Constant')
+ms_clust_lk <- modelsummary(list_models_clustered_LK, 
+             estimate = c("{estimate}{stars}"), 
+             statistic = "({std.error})", stars = stars, coef_map = cm2,
+             gof_map = gof_map, output = output)
+ms_clust_lk
+```
+
+```{r}
+
+```
+
