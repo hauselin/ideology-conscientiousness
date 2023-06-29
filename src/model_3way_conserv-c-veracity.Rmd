@@ -1,0 +1,116 @@
+---
+title: "model"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+rm(list = ls())
+library(tidyverse)
+library(data.table)
+library(glue)
+library(ggrepel)
+library(fixest)
+library(modelsummary)
+theme_set(theme_minimal())
+source("utils.R")
+```
+
+```{r}
+dt_lawson <- fread("../data/clean/combined_lawson_studies.csv")
+dt_us <- fread("../data/clean/combined_studies.csv")
+
+glimpse(dt_lawson)
+glimpse(dt_us)
+```
+
+```{r share ~ ideology * c (lawson ideology, us demrep)}
+dt_lawson1 <- select(dt_lawson, study, pid, share, ideology = conservatism, c, veracity, stimulus)
+dt_lawson1[, stimulus := as.character(stimulus)]
+dt_lawson1
+
+dt_us <- mutate_if(dt_us, is.integer, as.numeric)
+dt_us1 <- copy(select(dt_us, study, pid, share, ideology = conserv, c, veracity, stimulus))
+dt_us1[study == "Study 5", study := "Study 5^"]
+
+dt_us5 <- dt_us[study == "Study 5"]
+dt_us5 <- select(dt_us5, study, pid, share, ideology = ideology, c, veracity, stimulus)
+dt_us5[, study := "Study 5*"]
+
+dt1 <- bind_rows(dt_lawson1, dt_us1, dt_us5)
+dt1[, mean(ideology, na.rm = T), study]
+dt1[, n_distinct(pid), study]
+glimpse(dt1)
+
+dt1[, stimulus := paste0(study, "-", stimulus)]
+dt1[, ideology := as.numeric(ideology)]
+
+# center/zscore within study
+dt1[, c := (c - mean(c, na.rm = T)) / sd(c, na.rm = T), study]
+dt1[, ideology := (ideology - mean(ideology, na.rm = T)) / sd(ideology, na.rm = T), study]
+dt1[, mean(ideology, na.rm = T), study]
+dt1[, sd(ideology, na.rm = T), study]
+dt1[, mean(c, na.rm = T), study]
+dt1[, sd(c, na.rm = T), study]
+```
+
+```{r fit model}
+# remove studies with only false headlines
+include <- dt1[, n_distinct(veracity), study][V1 != 1, study]
+dt1 <- dt1[study %in% include]
+dt1[, n_distinct(veracity), study]
+
+studies <- dt1[, unique(study)]
+models <- list()
+i <- 1
+for (i in 1:length(studies)) {
+    st <- studies[i]
+    mname <- gsub(" ", "_", tolower(st))
+    fname <- glue("../results/models_ideology-c/{mname}.rds")
+    print(fname)
+    dt_temp <- dt1[study == st]
+    
+    # cluster SE participant
+    m1 <- feglm(share ~ ideology * c * veracity, data = dt_temp, vcov = cluster ~ pid)
+    models[[st]] <- m1
+    
+    print(summarybf(compute_bf(m1, nobs(m1), "ideology:c = 0")))
+    print(summarybf(compute_bf(m1, nobs(m1), "ideology:c:veracity = 0")))
+}
+```
+
+```{r plot models}
+models
+modelsummary(models, fmt = 2, 
+             estimate = "{estimate}{stars} ({std.error})", 
+             statistic = NULL, 
+             gof_omit = "AIC|BIC|R2|Log|Num.Obs|Std.Errors")
+
+dat <- data.table(modelplot(models, draw = FALSE))
+setnames(dat, "model", "study")
+dat[, study := gsub("Lawson", "L&K", study)]
+dat[, study := factor(study, levels = rev(unique(dat$study)))]
+
+mapper <- c("ideology" = "Conservatism",
+            "c" = "Conscientiousness",
+            "veracity" = "Veracity",
+            "ideology × c" = "Conservatism*Conscientiousness", 
+            "ideology × veracity" = "Conservatism*Veracity",
+            "c × veracity" = "Conscientiousness*Veracity",
+            "ideology × c × veracity" = "Conservatism*Conscientiousness*Veracity")
+dat[, term := recode_factor(term, !!!mapper)]
+
+
+exclude <- c("Conscientiousness*Veracity", "(Intercept)")
+# ggplot(dat[term == "Conservatism-Conscientiousness-Veracity Interaction"], aes(estimate, study)) +
+ggplot(dat[!term %in% exclude], aes(estimate, study)) +
+    facet_wrap(~term, nrow = 3, scales = "free_x") +
+    geom_vline(xintercept = 0, lty = "dashed") +
+    geom_point(size = 1) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0, size = 0.5) +
+    labs(x = "Estimate (95% CI)", y = "", title = "") +
+    theme(plot.title = element_text(hjust = 0.5), panel.spacing.x = unit(1, "lines"))
+ggsave("../figures/3way_conserv-c-veracity.png", dpi = 300, bg = "white", width = 8, height = 8)
+```
+

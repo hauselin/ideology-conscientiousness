@@ -1,0 +1,126 @@
+---
+title: "model"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+rm(list = ls())
+library(tidyverse)
+library(data.table)
+library(glue)
+library(ggrepel)
+library(fixest)
+library(modelsummary)
+theme_set(theme_minimal())
+source("utils.R")
+```
+
+```{r}
+dt_us <- fread("../data/clean/combined_studies.csv")
+
+glimpse(dt_us)
+```
+
+```{r share ~ ideology * c (lawson ideology, us demrep)}
+dt_us <- dt_us[study != "Study 3"]  # study 3 has all false headlines
+dt_us <- mutate_if(dt_us, is.integer, as.numeric)
+dt_us1 <- copy(select(dt_us, study, pid, share, ideology = conserv, c, veracity, stimulus, o:edu, attention = attention_score, aot))
+dt_us1[study == "Study 5", study := "Study 5^"]
+
+dt_us5 <- dt_us[study == "Study 5"]
+dt_us5 <- select(dt_us5, study, pid, share, ideology = ideology, c, veracity, stimulus, o:edu, attention = attention_score, aot)
+dt_us5[, study := "Study 5*"]
+
+dt1 <- bind_rows(dt_us1, dt_us5)
+dt1[, mean(ideology, na.rm = T), study]
+dt1[, n_distinct(pid), study]
+glimpse(dt1)
+
+dt1[, stimulus := paste0(study, "-", stimulus)]
+dt1[, ideology := as.numeric(ideology)]
+
+# zscore within study
+features <- c("o", "c", "e", "a", "n", "age", "edu", "attention", "aot", "ideology")
+dt1[, (features) := lapply(.SD, function(x) (x - mean(x, na.rm = T)) / sd(x, na.rm = T)), by = study, .SDcols = features]
+dt1[, lapply(.SD, function(x) round(mean(x, na.rm = T))), by = study, .SDcols = features]
+dt1[, lapply(.SD, function(x) round(sd(x, na.rm = T))), by = study, .SDcols = features]
+
+dt1[, veracity := veracity - 0.5]
+dt1[, gender := gender - 0.5]
+```
+
+
+
+```{r attention checks}
+dta <- distinct(dt1[, .(study, pid, attention)])
+dta <- dta[study != "Study 5*"]
+x <- dta[, .(total = .N), keyby = .(study)]
+x
+y <- data.table(left_join(dta[, .N, keyby = .(study, attention)], x))
+y[, prop := N / total * 100]
+y[order(study, attention)]
+```
+
+
+
+```{r fit model}
+# remove studies with only false headlines
+include <- dt1[, n_distinct(veracity), study][V1 != 1, study]
+dt1 <- dt1[study %in% include]
+dt1[, n_distinct(veracity), study]
+studies <- dt1[, unique(study)]
+
+models <- list()
+i <- 1
+for (i in 1:length(studies)) {
+    st <- studies[i]
+    mname <- gsub(" ", "_", tolower(st))
+    fname <- glue("../results/models_full/{mname}.rds")
+    print(fname)
+    dt_temp <- dt1[study == st]
+    
+    # cluster SE participant
+    m1 <- feglm(share ~ ideology * veracity * (o + c + e + a + n + age + gender + edu + attention + aot), data = dt_temp, vcov = cluster ~ pid)
+    models[[st]] <- m1
+    
+    print(summarybf(compute_bf(m1, nobs(m1), "ideology = 0")))
+    # print(summarybf(compute_bf(m1, nobs(m1), "ideology:c = 0")))
+    # print(summarybf(compute_bf(m1, nobs(m1), "ideology:veracity:c = 0")))
+}
+```
+
+```{r plot models}
+models
+modelsummary(models, fmt = 3, 
+             estimate = "{estimate}{stars} ({std.error})", 
+             statistic = NULL, 
+             gof_omit = "AIC|BIC|R2|Log|Num.Obs|Std.Errors")
+
+dat <- data.table(modelplot(models, draw = FALSE))
+setnames(dat, "model", "study")
+dat[, study := gsub("Lawson", "L&K", study)]
+dat[, study := factor(study, levels = rev(unique(dat$study)))]
+dat[, unique(term)]
+
+mapper <- c("ideology" = "Conservatism",
+            "c" = "Conscientiousness",
+            "ideology × c" = "Conservatism*Conscientiousness", 
+            "ideology × aot" = "Conservatism*AOT", 
+            "ideology × veracity" = "Conservatism*Veracity",
+            "veracity × c" = "Conscientiousness*Veracity",
+            "ideology × veracity × c" = "Conservatism*Conscientiousness*Veracity",
+            "ideology × veracity × aot" = "Conservatism*AOT*Veracity")
+dat[, term := recode_factor(term, !!!mapper)]
+
+ggplot(dat[term %in% mapper], aes(estimate, study)) +
+    facet_wrap(~term, nrow = 4, scales = "free_x") +
+    geom_vline(xintercept = 0, lty = "dashed") +
+    geom_point(size = 1) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0, size = 0.5) +
+    labs(x = "Estimate (95% CI)", y = "") +
+    theme(plot.title = element_text(hjust = 0.5))
+ggsave("../figures/model_full.png", dpi = 300, bg = "white", width = 8, height = 6)
+```
+
