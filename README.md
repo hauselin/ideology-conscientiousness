@@ -13,5 +13,7 @@ Conscientiousness does not moderate the association between political ideology a
 ## Directories
 
 - `data`
+- `doc`: manuscript and supplement
+    - see also https://psyarxiv.com/8fkpy
 - `results`: tables and output
 - `src`: source code
