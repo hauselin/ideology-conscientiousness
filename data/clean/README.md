@@ -1,5 +1,11 @@
 # README
 
+- `combined_lawson_studies.csv`: Lawson & Kakkar's data
+- `combined_studies.csv`: our data
+- other csv files: data for individual studies
+
+
+
 Data key
 
 - `pid`: participant id
@@ -28,3 +34,4 @@ Data key
 - `study`: study number
 - `conserv`: mean of `social_conserv` and `economic_conserv`
 - `thermo`: mean of `warm_repub` and `warm_democrat`
+- `ideology`: Lawson & Kakkar's ideology measure
