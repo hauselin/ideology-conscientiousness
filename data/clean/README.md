@@ -34,4 +34,6 @@ Data key
 - `study`: study number
 - `conserv`: mean of `social_conserv` and `economic_conserv`
 - `thermo`: mean of `warm_repub` and `warm_democrat`
-- `ideology`: Lawson & Kakkar's ideology measure
+- `conservatism` or `ideology`: Lawson & Kakkar's ideology measure
+  - `conservatism` in L&K's data
+  - `ideology` in our data (only available in Study 5) 
